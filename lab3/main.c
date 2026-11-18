@@ -25,8 +25,8 @@ void dfs(const char* const dirpath, size_t dirpath_len, FileInfoList_t* const un
 
 int main(int argc, const char* const argv[]) {
     if (argc > 2) {
-        fprintf(stderr, "[ERROR]: only 1 argument available - root directory\n");
-        fprintf(stderr, "       | given: %d arguments\n", argc - 1);
+        fprintf(stderr, "[ERROR]: only 1 argument available - root directory;\n");
+        fprintf(stderr, "       | given: %d arguments.\n", argc - 1);
         return EXIT_FAILURE;
     }
 
@@ -37,10 +37,11 @@ int main(int argc, const char* const argv[]) {
     struct stat root_dir_st;
     fatal_check(lstat(root_dirpath, &root_dir_st) == 0, "lstat(root_dir)");
     if (not S_ISDIR(root_dir_st.st_mode)) {
-        fprintf(stderr, "[ERROR]: %s is not a directory\n", root_dirpath);
+        fprintf(stderr, "[ERROR]: %s is not a directory.\n", root_dirpath);
         free(root_dirpath);
         return EXIT_FAILURE;
     }
+    printf("[ROOT DIRECTORY]: %s\n", root_dirpath);
 
     FileInfoList_t* const unique_files = malloc(sizeof(FileInfoList_t));
     fatal_check(unique_files, "unique_files malloc");
@@ -65,9 +66,7 @@ void dfs(const char* const dirpath, size_t dirpath_len, FileInfoList_t* const un
         size_t entry_path_len = dirpath_len + 1 + strlen(entry->d_name);
         char* const entry_path = malloc(entry_path_len + 1);
         fatal_check(entry_path, "entry_path malloc");
-        strcpy(entry_path, dirpath);
-        entry_path[dirpath_len] = '/';
-        strcpy(entry_path + dirpath_len + 1, entry->d_name);
+        snprintf(entry_path, entry_path_len + 1, "%s/%s", dirpath, entry->d_name);
         bool free_entry_path = true;
 
         // printf("%s\n", entry_path);
@@ -78,20 +77,27 @@ void dfs(const char* const dirpath, size_t dirpath_len, FileInfoList_t* const un
         if (S_ISREG(entry_st.st_mode)) {
             FileInfo_t file;
             file.path = entry_path;
+            file.path_owner = true;
             calculate_sha256(entry_path, file.hash);
 
-            const FileInfo_t* duplicate = FileInfoList_find_by_hash(unique_files, file.hash);
-            if (duplicate and files_equal(file.path, duplicate->path)) {
-                replace_with_hardlink(file.path, duplicate->path);
-                printf("replaced with hardlink: %s\n", entry_path);
-            } else {
+            FileInfoList_t* duplicates = FileInfoList_find_all_by_hash(unique_files, file.hash); // malloc inside
+            bool was_equal = false;
+            for (size_t i = 0; i < duplicates->size; ++i)
+                if (files_equal(file.path, duplicates->data[i].path)) {
+                    replace_with_hardlink(file.path, duplicates->data[i].path);
+                    printf("replaced with hardlink: %s\n", entry_path);
+                    was_equal = true;
+                    break;
+                }
+            if (not was_equal) {
                 FileInfoList_append(unique_files, file);
                 free_entry_path = false;
             }
+            FileInfoList_free(duplicates);
         } else if (S_ISDIR(entry_st.st_mode))
             dfs(entry_path, entry_path_len, unique_files);
         else
-            printf("entry skipped: %s\n", entry_path);
+            printf("skipped: %s\n", entry_path);
 
         if (free_entry_path)
             free(entry_path);

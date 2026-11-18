@@ -14,7 +14,7 @@ void FileInfoList_init(FileInfoList_t* const fileInfoList) {
 
 void FileInfoList_append(FileInfoList_t* const fileInfoList, FileInfo_t fileInfo) {
     if (fileInfoList->size == fileInfoList->capacity) {
-        size_t new_capacity = fileInfoList->capacity
+        size_t new_capacity = fileInfoList->capacity > 0
                             ? (fileInfoList->capacity << 1)
                             : 1;
         FileInfo_t* new_data = realloc(
@@ -30,16 +30,24 @@ void FileInfoList_append(FileInfoList_t* const fileInfoList, FileInfo_t fileInfo
     fileInfoList->data[fileInfoList->size++] = fileInfo;
 }
 
-const FileInfo_t* FileInfoList_find_by_hash(FileInfoList_t* const fileInfoList, const unsigned char* const hash) {
-    for (size_t i = 0; i < fileInfoList->size; ++i) {
-        if (memcmp(fileInfoList->data[i].hash, hash, SHA256_LEN) == 0)
-            return fileInfoList->data + i;
-    }
-    return NULL;
+FileInfoList_t* FileInfoList_find_all_by_hash(FileInfoList_t* const fileInfoList, const unsigned char* const hash) {
+    FileInfoList_t* found = malloc(sizeof(FileInfoList_t));
+    fatal_check(found != NULL, "found malloc");
+    FileInfoList_init(found);
+
+    for (size_t i = 0; i < fileInfoList->size; ++i)
+        if (memcmp(fileInfoList->data[i].hash, hash, SHA256_LEN) == 0) {
+            FileInfo_t fileInfo = fileInfoList->data[i];
+            fileInfo.path_owner = false;
+            FileInfoList_append(found, fileInfo);
+        }
+
+    return found;
 }
 
 void FileInfoList_free(FileInfoList_t* const fileInfoList) {
     for (size_t i = 0; i < fileInfoList->size; ++i)
-        free(fileInfoList->data[i].path);
+        if (fileInfoList->data[i].path_owner)
+            free(fileInfoList->data[i].path);
     free(fileInfoList->data);
 }

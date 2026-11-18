@@ -86,9 +86,7 @@ void replace_with_hardlink(const char* const replacing_filepath, const char* con
     size_t template_len = parent_dirpath_len + 1 + strlen(TEMP_DIRNAME_TEMPLATE);
     char* const template = malloc(template_len + 1);
     fatal_check(template != NULL, "template malloc");
-    strcpy(template, parent_dirpath);
-    template[parent_dirpath_len] = '/';
-    strcpy(template + parent_dirpath_len + 1, TEMP_DIRNAME_TEMPLATE);
+    snprintf(template, template_len + 1, "%s/%s", parent_dirpath, TEMP_DIRNAME_TEMPLATE);
 
     const char* const temp_dirpath = mkdtemp(template);
     fatal_check(temp_dirpath != NULL, "mkdtemp");
@@ -97,9 +95,7 @@ void replace_with_hardlink(const char* const replacing_filepath, const char* con
     size_t temp_filepath_len = temp_dirpath_len + 1 + strlen(TEMP_FILENAME);
     char* const temp_filepath = malloc(temp_filepath_len + 1);
     fatal_check(temp_filepath != NULL, "temp_filepath malloc");
-    strcpy(temp_filepath, temp_dirpath);
-    temp_filepath[temp_dirpath_len] = '/';
-    strcpy(temp_filepath + temp_dirpath_len + 1, TEMP_FILENAME);
+    snprintf(temp_filepath, temp_filepath_len + 1, "%s/%s", temp_dirpath, TEMP_FILENAME);
 
     fatal_check(link(remaining_filepath, temp_filepath) == 0, "link");
     fatal_check(rename(temp_filepath, replacing_filepath) == 0, "rename");

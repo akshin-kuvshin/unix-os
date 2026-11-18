@@ -10,8 +10,8 @@
 
 #define BUFFER_SIZE (size_t)4096
 #define SHA256_LEN (size_t)32
-#define TEMP_DIRNAME_TEMPLATE ".tmp-XXXXXX"
-#define TEMP_FILENAME "link"
+#define TEMP_DIRNAME_TEMPLATE ".aboba-XXXXXX"
+#define TEMP_FILENAME "aboba"
 
 void calculate_sha256(const char* const filepath, unsigned char* const hash);
 bool files_equal(const char* const filepath1, const char* const filepath2);
