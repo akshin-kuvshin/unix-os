@@ -128,10 +128,19 @@ if [[ -n "$output_attempt" ]]; then
     output="$output_attempt"
 fi
 
+flags=""
+flags_attempt_file="flags_attempt"
+touch "$tmpdir/$flags_attempt_file"
+find_parameter "flags" 2>> "$tmpdir/$logfile" 3> "$tmpdir/$flags_attempt_file"
+flags_attempt="$(cat "$tmpdir/$flags_attempt_file")"
+if [[ -n "$flags_attempt" ]]; then
+    flags="$flags_attempt"
+fi
+
 for file in "$ROOT"/*.c; do
-    "$compiler" -c "$file" -o "$tmpdir/$(basename "$file" .c).o" 2>> "$tmpdir/$logfile"
+    "$compiler" -c "$file" -o "$tmpdir/$(basename "$file" .c).o" $flags 2>> "$tmpdir/$logfile"
 done
 
-"$compiler" "$tmpdir"/*.o -o "$ROOT/$output" 2>> "$tmpdir/$logfile"
+"$compiler" "$tmpdir"/*.o -o "$ROOT/$output" $flags 2>> "$tmpdir/$logfile"
 
 echo "Done."
