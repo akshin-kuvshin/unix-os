@@ -1,6 +1,19 @@
 // author: Danila "akshin_" Axyonov
 // Linux specific!
 
+/* P.S.: после разговора с Михаилом Сергеевичем Пожидаевым, было выяснено, что системный вызов
+ * open() с флагами O_CREAT и O_EXCL настолько сильно атомарен, что пиздец, поэтому от /shared/.lock,
+ * от соответствующего lock_fd и от flock-а на нём можно отказаться - это излишние меры, которые
+ * дублируют те гарантии, которые уже предоставляет open() с флагами O_CREAT и O_EXCL.
+ *
+ * Системный вызов open() с флагом O_CREAT, но без флага O_EXCL, тоже в определённом смысле атомарен:
+ * если файла не существовало, то только один из процессов создаст его, а остальные - просто откроют.
+ * Однако, между разными такими open может произойти unlink откуда-то извне, в результате чего два
+ * или более процессов получат разные fd на разные созданные inode-ы, причём может существовать
+ * (а может и не существовать, если в конце тоже произошёл unlink) жёсткая ссылка лишь на один из
+ * этих inode-ов, которая будет расположена по тому пути, который передавался в open().
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -11,15 +24,13 @@
 
 #include <sys/types.h>
 #include <fcntl.h>
-#include <sys/file.h>
 #include <unistd.h>
 
-#define LOCK_MODE (mode_t)0666
 #define FILE_MODE (mode_t)0644
 
 #define UUID_LEN (size_t)36
 #define PATH_MAX (size_t)4096
-#define CONTENT_MAX (UUID_LEN + 1 + 10 + 1) // uuid + '\n' + file_n (possibly > 999) + '\0'
+#define CONTENT_MAX (UUID_LEN + 1 + 20 + 1) // uuid + '\n' + file_n (possibly > 999) + '\0'
 
 typedef unsigned long long int ulli;
 
@@ -36,28 +47,22 @@ int main(void) {
     fatal_check(fclose(uuid_file) == 0, "fclose");
 
     const char* const shared_dirpath = "/shared";
-    const char* const lock_filepath = "/shared/.lock";
-    int lock_fd = open(lock_filepath, O_CREAT | O_RDWR, LOCK_MODE);
-    fatal_check(lock_fd != -1, "lock_fd open");
 
     char filepath[PATH_MAX];
     ulli files_created = 0;
     while (true) {
-        while (flock(lock_fd, LOCK_EX) == -1)
-            fatal_check(errno == EINTR, "flock(LOCK_EX)");
-
         ulli file_n = 1;
         int file_fd;
-        do {
+
+        snprintf(filepath, PATH_MAX, "%s/%03llu", shared_dirpath, file_n);
+        file_fd = open(filepath, O_CREAT | O_EXCL | O_WRONLY, FILE_MODE);
+        while (file_fd == -1) {
+            fatal_check(errno == EEXIST or errno == EINTR, "file_fd open");
+            file_n += errno == EEXIST;
+
             snprintf(filepath, PATH_MAX, "%s/%03llu", shared_dirpath, file_n);
             file_fd = open(filepath, O_CREAT | O_EXCL | O_WRONLY, FILE_MODE);
-            if (file_fd == -1) {
-                fatal_check(errno == EEXIST or errno == EINTR, "file_fd open");
-                file_n += errno == EEXIST;
-            }
-        } while (file_fd == -1);
-
-        fatal_check(flock(lock_fd, LOCK_UN) == 0, "flock(LOCK_UN)");
+        }
 
 
 
@@ -95,7 +100,6 @@ int main(void) {
     }
 
     // unreachable, btw
-    fatal_check(close(lock_fd) == 0, "close(lock_fd)");
     return EXIT_SUCCESS;
 }
 
